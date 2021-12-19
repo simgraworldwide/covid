@@ -6,7 +6,7 @@ source("packages.R")
 
 
 ## Load and wrangle data ----
-hosp_vaccpersons_age_raw <- read_csv("https://www.covid19.admin.ch/api/data/20211115-ew84xikb/sources/COVID19Hosp_vaccpersons_AKL10_w.csv")
+hosp_vaccpersons_age_raw <- read_csv("https://www.covid19.admin.ch/api/data/20211217-drih76wp/sources/COVID19Hosp_vaccpersons_AKL10_w.csv")
 hosp_vaccpersons_age_raw1 <- hosp_vaccpersons_age_raw %>%
   mutate(kw = as.numeric(str_trunc(date, 2, side = "left", ellipsis = ""))) %>%
   relocate(kw, .after = date) %>%
