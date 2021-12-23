@@ -193,7 +193,7 @@ hosp_vaccpersons_age %>%
       y = entries)
     ) +
   labs(
-    title = "Hospitalisierungen nach Alter und Impfstatus",
+    title = "Hospitalisierungen nach Alter und Impfstatus mit theoretischen Hospitalisierungen bei Durchimpfung",
     y = "Hospitalisierungen",
     x = "Altersklasse",
     fill = "Impfstatus",
@@ -207,7 +207,7 @@ hosp_vaccpersons_age %>%
       y = (entries_all_vaxxed / 2), # Daten werden sonst doppelt hinzugefügt, da bei beiden Impfstatus dabei
       fill = id
       ),
-    alpha = 0.5
+    alpha = 0.4
     ) +
   facet_wrap(
     vars(kw),
