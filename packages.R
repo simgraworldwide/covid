@@ -7,6 +7,7 @@ requiredPackages <- c(
   "odbc",
   "renv",
   "ROracle",
+  "rvest",
   "tidyverse"
 )
 
