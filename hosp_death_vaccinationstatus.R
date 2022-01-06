@@ -82,7 +82,12 @@ hosp_vaccpersons_age <- hosp_vaccpersons_age_raw1 %>%
   left_join(pop_total) %>%
   left_join(entries_total) %>%
   left_join(hosp_model_fully_vaxxed, by = c("date" = "date", "year" = "year", "kw" = "kw", "altersklasse_covid19" = "altersklasse_covid19")) %>%
-  select(-c(inz_entries_unvac, inz_entries_vac, -pop.x, -pop.y)) %>%
+  select(-c(
+    inz_entries_unvac,
+    inz_entries_vac,
+    pop.x,
+    pop.y)
+    ) %>%
   mutate(
     rel_pop = round(pop/pop_total*100, digits = 2),
     rel_entries = round(entries/entries_total*100, digits = 2)
@@ -304,12 +309,15 @@ ggplot(
     colour = vaccination_status,
     linetype = vaccination_status
   )) +
-  facet_wrap(altersklasse_covid19 ~ ., scales = "free") +
+  facet_wrap(
+    altersklasse_covid19 ~ .
+    # scales = "free"
+    ) +
   # scale_color_brewer(palette = "Dark2") +
   # scale_color_discrete() +
   scale_colour_manual(values = c(
-    "not_vaccinated" = "#B01657",
-    "fully_vaccinated" = "#00797B"
+    "fully_vaccinated" = "#00797B",
+    "not_vaccinated" = "#B01657"
   )) +
   # theme(legend.position = c(0.65, 0.14)) +
   theme_minimal()
