@@ -9,6 +9,7 @@ requiredPackages <- c(
   "renv",
   "ROracle",
   "rvest",
+  "shiny",
   "tidyverse"
 )
 

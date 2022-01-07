@@ -219,6 +219,27 @@ tests <- tests_raw %>%
 #
 # iso_raw <- read_csv(iso_url)
 
+## Hospital Capacity ----
+
+hospcap_opendata.swiss <- read_html("https://opendata.swiss/de/dataset/covid-19-schweiz/resource/f28bc2b6-1d6d-42d6-ae9e-895a906b4d47")
+hospcap_url <- html_attr(html_elements(hospcap_opendata.swiss, "a"), "href")[21]
+rm(hospcap_opendata.swiss)
+
+hospcap_raw <- read_csv(hospcap_url)
+hospcap <- hospcap_raw %>%
+  filter(geoRegion == "CH") %>%
+  select(-c(13:31, 42:45), datum = date) %>%
+  mutate(
+    year = year(datum),
+    kw = week(datum),
+    date = paste0(year, str_pad(kw, 2, pad = "0"))
+  ) %>%
+  relocate(date, year, kw, .after = datum)
+
+# Definitions ====
+
+col1 <- "#000000"
+
 # User Interface ====
 
 ui <- fluidPage
