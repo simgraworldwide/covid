@@ -11,17 +11,20 @@ hosp_url <- html_attr(html_elements(hosp_opendata.swiss, "a"), "href")[21]
 
 hosp_vaccpersons_age_raw <- read_csv(hosp_url)
 hosp_vaccpersons_age_raw1 <- hosp_vaccpersons_age_raw %>%
-  mutate(kw = as.numeric(str_trunc(date, 2, side = "left", ellipsis = ""))) %>%
-  relocate(kw, .after = date) %>%
-  # group_by(altersklasse_covid19, kw) %>%
-  # mutate(comp = max(inz_entries)/min(inz_entries)) %>%
+  mutate(
+    kw = as.numeric(str_trunc(date, 2, side = "left", ellipsis = "")),
+    year = as.numeric(str_trunc(date, 4, side = "right", ellipsis = ""))
+    ) %>%
+  # relocate(kw, .after = date) %>%
   filter(
     # kw >= 30, # use only data after week 29
     altersklasse_covid19 != "Unbekannt",
     altersklasse_covid19 != "all",
     vaccination_status %in% c("fully_vaccinated", "not_vaccinated")
-    ) %>%
+  ) %>%
   select(
+    date,
+    year,
     kw,
     altersklasse_covid19,
     vaccination_status,
@@ -36,35 +39,38 @@ hosp_vaccpersons_age_raw1 <- hosp_vaccpersons_age_raw %>%
 ### Calculate relative values ----
 # population per age cohort
 pop_total <- hosp_vaccpersons_age_raw1 %>%
-  group_by(kw, altersklasse_covid19) %>%
+  group_by(year, kw, altersklasse_covid19) %>%
   summarise(pop_total = sum(pop))
 
 # entries per age cohort
 entries_total <- hosp_vaccpersons_age_raw1 %>%
-  group_by(kw, altersklasse_covid19) %>%
+  group_by(year, kw, altersklasse_covid19) %>%
   summarise(entries_total = sum(entries))
 
 # Hilfstabellen für die Inzidenzen von geimpften und ungeimpften
 hosp_vaccpersons_age_unvac <- hosp_vaccpersons_age_raw1 %>%
   filter(vaccination_status == "not_vaccinated") %>%
   mutate(inz_entries_unvac = inz_entries) %>%
-  select(kw, altersklasse_covid19, pop, inz_entries_unvac)
+  select(date, year, kw, altersklasse_covid19, pop, inz_entries_unvac)
 
 hosp_vaccpersons_age_vac <- hosp_vaccpersons_age_raw1 %>%
   filter(vaccination_status == "fully_vaccinated") %>%
   mutate(inz_entries_vac = inz_entries) %>%
-  select(kw, altersklasse_covid19, pop, inz_entries_vac)
+  select(date, year, kw, altersklasse_covid19, pop, inz_entries_vac)
 
 # Vergleich der Inzidenzen pro Altersklasse und Woche
 hosp_vaccpersons_age_rel <- hosp_vaccpersons_age_unvac %>%
-  left_join(hosp_vaccpersons_age_vac, by = c("kw", "altersklasse_covid19")) %>%
+  left_join(hosp_vaccpersons_age_vac, by = c("date", "year", "kw", "altersklasse_covid19")) %>%
   mutate(inz_entries_rel = inz_entries_unvac/inz_entries_vac)
 
 # Modell für alle vaxxed
 hosp_model_fully_vaxxed <- hosp_vaccpersons_age_raw1 %>%
   filter(vaccination_status == "fully_vaccinated") %>%
-  mutate(entries_all_vaxxed = round((inz_entries * pop / 100000), 0)) %>%
+  left_join(pop_total) %>%
+  mutate(entries_all_vaxxed = round((inz_entries * pop_total / 100000), 0)) %>%
   select(
+    date,
+    year,
     kw,
     altersklasse_covid19,
     entries_all_vaxxed
@@ -75,8 +81,13 @@ hosp_vaccpersons_age <- hosp_vaccpersons_age_raw1 %>%
   left_join(hosp_vaccpersons_age_rel) %>%
   left_join(pop_total) %>%
   left_join(entries_total) %>%
-  left_join(hosp_model_fully_vaxxed, by = c("kw" = "kw", "altersklasse_covid19" = "altersklasse_covid19")) %>%
-  select(-c(inz_entries_unvac, inz_entries_vac, -pop.x, -pop.y)) %>%
+  left_join(hosp_model_fully_vaxxed, by = c("date" = "date", "year" = "year", "kw" = "kw", "altersklasse_covid19" = "altersklasse_covid19")) %>%
+  select(-c(
+    inz_entries_unvac,
+    inz_entries_vac,
+    pop.x,
+    pop.y)
+    ) %>%
   mutate(
     rel_pop = round(pop/pop_total*100, digits = 2),
     rel_entries = round(entries/entries_total*100, digits = 2)
@@ -84,20 +95,20 @@ hosp_vaccpersons_age <- hosp_vaccpersons_age_raw1 %>%
 
 hc1 <- hosp_vaccpersons_age %>%
   filter(vaccination_status == "fully_vaccinated") %>%
-  select(kw, altersklasse_covid19, entries_vaxxed = entries, entries_all_vaxxed)
+  select(date, year, kw, altersklasse_covid19, entries_vaxxed = entries, entries_all_vaxxed)
 hc2 <- hosp_vaccpersons_age %>%
   filter(vaccination_status == "not_vaccinated") %>%
-  select(kw, altersklasse_covid19, entries_unvaxxed = entries)
+  select(date, year, kw, altersklasse_covid19, entries_unvaxxed = entries)
 hosp_comparison <- hc1 %>%
   left_join(hc2) %>%
   mutate(
     entries_total = entries_vaxxed + entries_unvaxxed,
     reduction = round(100 - (entries_all_vaxxed / entries_total * 100), 2)
-    ) %>%
+  ) %>%
   relocate(entries_all_vaxxed, .after = entries_total)
 
 hosp_comparison_total <- hosp_comparison %>%
-  group_by(kw) %>%
+  group_by(year, kw) %>%
   summarise(
     entries_vaxxed = sum(entries_vaxxed),
     entries_unvaxxed = sum(entries_unvaxxed),
@@ -144,45 +155,46 @@ hosp_vaccpersons_age_allweeks <- hosp_vaccpersons_age_allweeks_raw %>%
 
 ## Create plots ----
 hosp_vaccpersons_age %>%
-  filter(kw >= 30) %>%
+  filter(kw >= 30 | year > 2021) %>%
+  # filter(date > 202130) %>%
   ggplot(
     # data = hosp_vaccpersons_age,
     mapping = aes(
-      x = kw,
+      x = date,
       y = inz_entries,
       group = vaccination_status,
       colour = vaccination_status)) +
-    labs(
-      title = "Hospitalisierungsinzidenz nach Alter und Impfstatus",
-      y = "Hospitalisierungen/100'000",
-      x = "Kalenderwoche Jahr 2021",
-      colour = "Impfstatus",
-      linetype = "Impfstatus"
-      ) +
-    # geom_point() +
-    geom_line(aes(
-      colour = vaccination_status,
-      linetype = vaccination_status
-      )) +
-    # geom_line(
-    #   data = hosp_vaccpersons_age[!is.na(hosp_vaccpersons_age$inz_entries_rel),],
-    #   mapping = aes(
-    #     x = kw,
-    #     y = inz_entries_rel
-    #     )
-    #   ) +
-    facet_wrap(
-      altersklasse_covid19 ~ .
-      # scales = "free"
-      ) +
-    # scale_color_brewer(palette = "Dark2") +
-    # scale_color_discrete() +
-    scale_colour_manual(values = c(
-      "fully_vaccinated" = "#00797B",
-      "not_vaccinated" = "#B01657"
-      )) +
-    # theme(legend.position = c(0.65, 0.14)) +
-    theme_minimal()
+  labs(
+    title = "Hospitalisierungsinzidenz nach Alter und Impfstatus",
+    y = "Hospitalisierungen/100'000",
+    x = "Jahr und Kalenderwoche",
+    colour = "Impfstatus",
+    linetype = "Impfstatus"
+  ) +
+  # geom_point() +
+  geom_line(aes(
+    colour = vaccination_status,
+    linetype = vaccination_status
+  )) +
+  # geom_line(
+  #   data = hosp_vaccpersons_age[!is.na(hosp_vaccpersons_age$inz_entries_rel),],
+  #   mapping = aes(
+  #     x = kw,
+  #     y = inz_entries_rel
+  #     )
+  #   ) +
+  facet_wrap(
+    altersklasse_covid19 ~ .
+    # scales = "free"
+  ) +
+  # scale_color_brewer(palette = "Dark2") +
+  # scale_color_discrete() +
+  scale_colour_manual(values = c(
+    "fully_vaccinated" = "#00797B",
+    "not_vaccinated" = "#B01657"
+  )) +
+  # theme(legend.position = c(0.65, 0.14)) +
+  theme_minimal()
 
 hosp_vaccpersons_age %>%
   filter(kw %in% c((max(kw)-11):max(kw))) %>%
@@ -191,14 +203,14 @@ hosp_vaccpersons_age %>%
     mapping = aes(
       x = altersklasse_covid19,
       y = entries)
-    ) +
+  ) +
   labs(
     title = "Hospitalisierungen nach Alter und Impfstatus mit theoretischen Hospitalisierungen bei Durchimpfung",
     y = "Hospitalisierungen",
     x = "Altersklasse",
     fill = "Impfstatus",
     alpha = "Durchimpfung"
-    ) +
+  ) +
   geom_col(aes(
     fill = vaccination_status
   )) +
@@ -206,13 +218,14 @@ hosp_vaccpersons_age %>%
     aes(
       y = (entries_all_vaxxed / 2), # Daten werden sonst doppelt hinzugefügt, da bei beiden Impfstatus dabei
       fill = id
-      ),
-    alpha = 0.4
-    ) +
+    ),
+    # position = "dodge2",
+    alpha = 0.5
+  ) +
   facet_wrap(
-    vars(kw),
+    vars(date),
     nrow = 3
-    ) +
+  ) +
   scale_fill_manual(values = c(
     "not_vaccinated" = "#B01657",
     "fully_vaccinated" = "#00797B",
@@ -229,12 +242,12 @@ hosp_model_fully_vaxxed %>%
     mapping = aes(
       x = altersklasse_covid19,
       y = entries_all_vaxxed
-      )) +
+    )) +
   labs(
     title = "Theoretische Hospitalisierungen bei Durchimpfung nach Alter",
     y = "Hospitalisierungen",
     x = "Altersklasse"
-    ) +
+  ) +
   geom_col() +
   facet_wrap(
     vars(kw),
@@ -255,16 +268,18 @@ death_url <- html_attr(html_elements(hosp_opendata.swiss, "a"), "href")[21]
 
 death_vaccpersons_age_raw <- read_csv(death_url)
 death_vaccpersons_age <- death_vaccpersons_age_raw %>%
-  mutate(kw = as.numeric(str_trunc(date, 2, side = "left", ellipsis = ""))) %>%
-  relocate(kw, .after = date) %>%
-  # group_by(altersklasse_covid19, kw) %>%
-  # mutate(comp = max(inz_entries)/min(inz_entries)) %>%
+  mutate(
+    kw = as.numeric(str_trunc(date, 2, side = "left", ellipsis = "")),
+    year = as.numeric(str_trunc(date, 4, side = "right", ellipsis = ""))) %>%
+  # relocate(kw, .after = date) %>%
   filter(
     altersklasse_covid19 != "Unbekannt",
     altersklasse_covid19 != "all",
     vaccination_status %in% c("fully_vaccinated", "not_vaccinated")
   ) %>%
   select(
+    date,
+    year,
     kw,
     altersklasse_covid19,
     vaccination_status,
@@ -279,14 +294,14 @@ death_vaccpersons_age <- death_vaccpersons_age_raw %>%
 ggplot(
   data = death_vaccpersons_age,
   mapping = aes(
-    x = kw,
+    x = date,
     y = inz_entries,
     group = vaccination_status,
     colour = vaccination_status)) +
   labs(
     title = "Sterbeinzidenz nach Alter und Impfstatus",
     y = "Todesfälle/100'000",
-    x = "Kalenderwoche Jahr 2021",
+    x = "Jahr und Kalenderwoche",
     colour = "Impfstatus",
     linetype = "Impfstatus") +
   # geom_point() +
@@ -294,12 +309,15 @@ ggplot(
     colour = vaccination_status,
     linetype = vaccination_status
   )) +
-  facet_wrap(altersklasse_covid19 ~ ., scales = "free") +
+  facet_wrap(
+    altersklasse_covid19 ~ .
+    # scales = "free"
+    ) +
   # scale_color_brewer(palette = "Dark2") +
   # scale_color_discrete() +
   scale_colour_manual(values = c(
-    "not_vaccinated" = "#B01657",
-    "fully_vaccinated" = "#00797B"
+    "fully_vaccinated" = "#00797B",
+    "not_vaccinated" = "#B01657"
   )) +
   # theme(legend.position = c(0.65, 0.14)) +
   theme_minimal()
@@ -322,7 +340,7 @@ hosp_vaccpersons_age_allweeks %>% gather(condition, measurement, rel_pop:rel_ent
     y = "Anteile in Prozent",
     x = "",
     fill = "Impfstatus"
-    ) +
+  ) +
   geom_bar(
     mapping = aes(
       # group = condition,
@@ -334,7 +352,7 @@ hosp_vaccpersons_age_allweeks %>% gather(condition, measurement, rel_pop:rel_ent
     # position = "dodge",
     stat = "identity",
     width = 0.7
-    ) +
+  ) +
   scale_fill_manual(values = c(
     "not_vaccinated" = "#B01657",
     "fully_vaccinated" = "#00797B"

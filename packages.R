@@ -5,9 +5,11 @@ requiredPackages <- c(
   "janitor",
   "lubridate",
   "odbc",
+  "RcppRoll",
   "renv",
   "ROracle",
   "rvest",
+  "shiny",
   "tidyverse"
 )
 
